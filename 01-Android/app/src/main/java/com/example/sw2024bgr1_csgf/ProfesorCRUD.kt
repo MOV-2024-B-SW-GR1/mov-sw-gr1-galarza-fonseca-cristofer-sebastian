@@ -1,78 +1,110 @@
-package com.example.sw2024bgr1_csgf
-
+import com.example.sw2024bgr1_csgf.DatabaseManager
+import com.example.sw2024bgr1_csgf.Profesor
 import java.time.LocalDate
 
 object ProfesorCRUD {
-    private const val FILE_NAME = "profesores.txt"
 
-    // Crear un nuevo profesor y asociarlo a la facultad
     fun crearProfesor(id: Int, nombre: String, apellido: String, fechaNacimiento: LocalDate, activo: Boolean, facultadId: Int) {
-        val nuevoProfesor = Profesor(id, nombre, apellido, fechaNacimiento, activo, facultadId)
+        DatabaseManager.getConnection().use { conn ->
+            val sql = """
+                INSERT INTO profesores (id, nombre, apellido, fecha_nacimiento, activo, facultad_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """.trimIndent()
 
-        // Guardar el nuevo profesor en el archivo
-        val profesores = FileManager.readFromFile(FILE_NAME).toMutableList()
-        profesores.add("${nuevoProfesor.id}|${nuevoProfesor.nombre}|${nuevoProfesor.apellido}|${nuevoProfesor.fechaNacimiento}|${nuevoProfesor.activo}|${nuevoProfesor.facultadId}")
-        FileManager.saveToFile(FILE_NAME, profesores)
-
-        println("Profesor creado y asociado a la facultad $facultadId exitosamente.")
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, id)
+                stmt.setString(2, nombre)
+                stmt.setString(3, apellido)
+                stmt.setString(4, fechaNacimiento.toString())
+                stmt.setBoolean(5, activo)
+                stmt.setInt(6, facultadId)
+                stmt.executeUpdate()
+            }
+        }
+        println("Profesor creado exitosamente.")
     }
 
-    // Leer los profesores desde el archivo
     fun leerProfesores(): List<Profesor> {
-        val profesoresString = FileManager.readFromFile(FILE_NAME)
-        return profesoresString.mapNotNull {
-            val partes = it.split("|")
-            if (partes.size == 6) {
-                try {
-                    val id = partes[0].toInt()
-                    val nombre = partes[1]
-                    val apellido = partes[2]
-                    val fechaNacimiento = LocalDate.parse(partes[3])
-                    val activo = partes[4].toBoolean()
-                    val facultadId = partes[5].toInt()
-
-                    Profesor(id, nombre, apellido, fechaNacimiento, activo, facultadId)
-                } catch (e: Exception) {
-                    println("Error al leer el profesor: ${e.message}")
-                    null // Si ocurre un error, se ignora esa línea
+        val profesores = mutableListOf<Profesor>()
+        DatabaseManager.getConnection().use { conn ->
+            val sql = "SELECT * FROM profesores"
+            conn.createStatement().use { stmt ->
+                val rs = stmt.executeQuery(sql)
+                while (rs.next()) {
+                    profesores.add(
+                        Profesor(
+                            rs.getInt("id"),
+                            rs.getString("nombre"),
+                            rs.getString("apellido"),
+                            LocalDate.parse(rs.getString("fecha_nacimiento")),
+                            rs.getBoolean("activo"),
+                            rs.getInt("facultad_id")
+                        )
+                    )
                 }
-            } else {
-                println("Línea no válida: $it") // Mensaje para líneas mal formadas
-                null
+            }
+        }
+        return profesores
+    }
+
+    fun actualizarProfesor(id: Int, nuevoNombre: String, nuevoApellido: String, nuevaFechaNacimiento: LocalDate, nuevoActivo: Boolean) {
+        DatabaseManager.getConnection().use { conn ->
+            val sql = """
+                UPDATE profesores 
+                SET nombre = ?, apellido = ?, fecha_nacimiento = ?, activo = ?
+                WHERE id = ?
+            """.trimIndent()
+
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, nuevoNombre)
+                stmt.setString(2, nuevoApellido)
+                stmt.setString(3, nuevaFechaNacimiento.toString())
+                stmt.setBoolean(4, nuevoActivo)
+                stmt.setInt(5, id)
+
+                val rowsAffected = stmt.executeUpdate()
+                if (rowsAffected > 0) {
+                    println("Profesor actualizado exitosamente.")
+                } else {
+                    println("No se encontró el profesor con ID: $id")
+                }
             }
         }
     }
 
-    // Actualizar un profesor
-    fun actualizarProfesor(id: Int, nuevoNombre: String, nuevoApellido: String, nuevaFechaNacimiento: LocalDate, nuevoActivo: Boolean) {
-        val profesores = FileManager.readFromFile(FILE_NAME).toMutableList()
-        val profesorIndex = profesores.indexOfFirst { it.split("|")[0].toInt() == id }
-
-        if (profesorIndex != -1) {
-            // Obtener los datos actuales y modificarlos según los nuevos valores
-            val profesorActual = profesores[profesorIndex].split("|")
-            val actualizado = "$id|$nuevoNombre|$nuevoApellido|${nuevaFechaNacimiento}|$nuevoActivo|${profesorActual[5]}"
-
-            // Reemplazar la línea correspondiente
-            profesores[profesorIndex] = actualizado
-            FileManager.saveToFile(FILE_NAME, profesores)
-            println("Profesor actualizado exitosamente.")
-        } else {
-            println("Profesor no encontrado.")
+    fun eliminarProfesor(id: Int) {
+        DatabaseManager.getConnection().use { conn ->
+            val sql = "DELETE FROM profesores WHERE id = ?"
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, id)
+                val rowsAffected = stmt.executeUpdate()
+                if (rowsAffected > 0) {
+                    println("Profesor eliminado exitosamente.")
+                } else {
+                    println("No se encontró el profesor con ID: $id")
+                }
+            }
         }
     }
 
-    // Eliminar un profesor
-    fun eliminarProfesor(id: Int) {
-        val profesores = FileManager.readFromFile(FILE_NAME).toMutableList()
-        val profesorIndex = profesores.indexOfFirst { it.split("|")[0].toInt() == id }
-
-        if (profesorIndex != -1) {
-            profesores.removeAt(profesorIndex)
-            FileManager.saveToFile(FILE_NAME, profesores)
-            println("Profesor eliminado exitosamente.")
-        } else {
-            println("Profesor no encontrado.")
+    fun leerProfesorPorId(id: Int): Profesor? {
+        DatabaseManager.getConnection().use { conn ->
+            val sql = "SELECT * FROM profesores WHERE id = ?"
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, id)
+                val rs = stmt.executeQuery()
+                if (rs.next()) {
+                    return Profesor(
+                        rs.getInt("id"),
+                        rs.getString("nombre"),
+                        rs.getString("apellido"),
+                        LocalDate.parse(rs.getString("fecha_nacimiento")),
+                        rs.getBoolean("activo"),
+                        rs.getInt("facultad_id")
+                    )
+                }
+            }
         }
+        return null
     }
 }

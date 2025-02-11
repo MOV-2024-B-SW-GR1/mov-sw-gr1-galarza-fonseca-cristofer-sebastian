@@ -1,91 +1,110 @@
 package com.example.sw2024bgr1_csgf
 
+import android.content.ContentValues
+import android.database.sqlite.SQLiteDatabase
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+
 
 object FacultadCRUD {
-    private const val FILE_NAME = "facultades.txt"
 
-    // Crear una nueva facultad
     fun crearFacultad(id: Int, nombre: String, ubicacion: String, fechaFundacion: LocalDate, presupuesto: Double) {
-        val nuevaFacultad = Facultad(id, nombre, ubicacion, fechaFundacion, presupuesto, mutableListOf())
+        DatabaseManager.getConnection().use { conn ->
+            val sql = """
+                INSERT INTO facultades (id, nombre, ubicacion, fecha_fundacion, presupuesto)
+                VALUES (?, ?, ?, ?, ?)
+            """.trimIndent()
 
-        // Guardar la nueva facultad en el archivo
-        val facultades = FileManager.readFromFile(FILE_NAME).toMutableList()
-        facultades.add("${nuevaFacultad.id}|${nuevaFacultad.nombre}|${nuevaFacultad.ubicacion}|${nuevaFacultad.fechaFundacion}|${nuevaFacultad.presupuesto}")
-        FileManager.saveToFile(FILE_NAME, facultades)
-
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, id)
+                stmt.setString(2, nombre)
+                stmt.setString(3, ubicacion)
+                stmt.setString(4, fechaFundacion.toString())
+                stmt.setDouble(5, presupuesto)
+                stmt.executeUpdate()
+            }
+        }
         println("Facultad creada exitosamente.")
     }
 
-    // Leer todas las facultades desde el archivo
     fun leerFacultades(): List<Facultad> {
-        val facultadesString = FileManager.readFromFile(FILE_NAME)
-        return facultadesString.mapNotNull {
-            val partes = it.split("|")
-            if (partes.size == 5) {  // Verificar si hay 5 elementos para la facultad
-                try {
-                    val id = partes[0].toInt()
-                    val nombre = partes[1]
-                    val ubicacion = partes[2]
-                    val fechaFundacion = LocalDate.parse(partes[3])
-                    val presupuesto = partes[4].toDouble()
-
-                    Facultad(id, nombre, ubicacion, fechaFundacion, presupuesto)
-                } catch (e: Exception) {
-                    null // Si hay un error al parsear, ignorarlo
+        val facultades = mutableListOf<Facultad>()
+        DatabaseManager.getConnection().use { conn ->
+            val sql = "SELECT * FROM facultades"
+            conn.createStatement().use { stmt ->
+                val rs = stmt.executeQuery(sql)
+                while (rs.next()) {
+                    facultades.add(
+                        Facultad(
+                            rs.getInt("id"),
+                            rs.getString("nombre"),
+                            rs.getString("ubicacion"),
+                            LocalDate.parse(rs.getString("fecha_fundacion")),
+                            rs.getDouble("presupuesto")
+                        )
+                    )
                 }
-            } else null
-        }
-    }
-
-    // Actualizar facultad
-    fun actualizarFacultad(id: Int, nuevoNombre: String, nuevaUbicacion: String, nuevaFechaFundacion: LocalDate, nuevoPresupuesto: Double) {
-        val facultades = FileManager.readFromFile(FILE_NAME).toMutableList()
-        val facultadIndex = facultades.indexOfFirst { it.split("|")[0].toInt() == id }
-
-        if (facultadIndex != -1) {
-            val partes = facultades[facultadIndex].split("|")
-            if (partes.size == 5) {
-                val actualizado = "$id|$nuevoNombre|$nuevaUbicacion|$nuevaFechaFundacion|$nuevoPresupuesto"
-                facultades[facultadIndex] = actualizado
-                FileManager.saveToFile(FILE_NAME, facultades)
-                println("Facultad actualizada exitosamente.")
-            } else {
-                println("Error: El formato de la facultad en el archivo no es correcto.")
             }
-        } else {
-            println("Facultad no encontrada.")
+        }
+        return facultades
+    }
+
+    fun actualizarFacultad(id: Int, nuevoNombre: String, nuevaUbicacion: String, nuevaFechaFundacion: LocalDate, nuevoPresupuesto: Double) {
+        DatabaseManager.getConnection().use { conn ->
+            val sql = """
+                UPDATE facultades 
+                SET nombre = ?, ubicacion = ?, fecha_fundacion = ?, presupuesto = ?
+                WHERE id = ?
+            """.trimIndent()
+
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, nuevoNombre)
+                stmt.setString(2, nuevaUbicacion)
+                stmt.setString(3, nuevaFechaFundacion.toString())
+                stmt.setDouble(4, nuevoPresupuesto)
+                stmt.setInt(5, id)
+
+                val rowsAffected = stmt.executeUpdate()
+                if (rowsAffected > 0) {
+                    println("Facultad actualizada exitosamente.")
+                } else {
+                    println("No se encontró la facultad con ID: $id")
+                }
+            }
         }
     }
 
-    // Leer una facultad por ID
-    fun leerFacultadPorId(id: Int): Facultad? {
-        val facultades = leerFacultades()
-        return facultades.find { it.id == id }
-    }
-
-
-
-    // Eliminar una facultad
     fun eliminarFacultad(id: Int) {
-        val facultades = FileManager.readFromFile(FILE_NAME).toMutableList()
-        val facultadIndex = facultades.indexOfFirst { it.split("|")[0].toInt() == id }
-
-        if (facultadIndex != -1) {
-            facultades.removeAt(facultadIndex)
-            FileManager.saveToFile(FILE_NAME, facultades)
-            println("Facultad eliminada exitosamente.")
-        } else {
-            println("Facultad no encontrada.")
+        DatabaseManager.getConnection().use { conn ->
+            val sql = "DELETE FROM facultades WHERE id = ?"
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, id)
+                val rowsAffected = stmt.executeUpdate()
+                if (rowsAffected > 0) {
+                    println("Facultad eliminada exitosamente.")
+                } else {
+                    println("No se encontró la facultad con ID: $id")
+                }
+            }
         }
     }
 
-    // Guardar la lista de facultades
-    fun guardarFacultades(facultades: List<Facultad>) {
-        val facultadesString = facultades.map {
-            "${it.id}|${it.nombre}|${it.ubicacion}|${it.fechaFundacion}|${it.presupuesto}|${it.profesores.joinToString(",") { it.id.toString() }}"
+    fun leerFacultadPorId(id: Int): Facultad? {
+        DatabaseManager.getConnection().use { conn ->
+            val sql = "SELECT * FROM facultades WHERE id = ?"
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, id)
+                val rs = stmt.executeQuery()
+                if (rs.next()) {
+                    return Facultad(
+                        rs.getInt("id"),
+                        rs.getString("nombre"),
+                        rs.getString("ubicacion"),
+                        LocalDate.parse(rs.getString("fecha_fundacion")),
+                        rs.getDouble("presupuesto")
+                    )
+                }
+            }
         }
-        FileManager.saveToFile(FILE_NAME, facultadesString)
+        return null
     }
 }

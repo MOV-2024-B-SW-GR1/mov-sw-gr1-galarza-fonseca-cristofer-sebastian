@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background_color_port_en">#8BC34A</color> <!-- Fondo anaranjado -->
+    <color name="text_color_port_en">#FFFFFF</color> <!-- Texto blanco -->
+</resources>
