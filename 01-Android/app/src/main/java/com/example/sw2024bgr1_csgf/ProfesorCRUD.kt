@@ -1,110 +1,85 @@
-import com.example.sw2024bgr1_csgf.DatabaseManager
-import com.example.sw2024bgr1_csgf.Profesor
+package com.example.sw2024bgr1_csgf
+
+import android.content.ContentValues
+import android.database.sqlite.SQLiteDatabase
 import java.time.LocalDate
 
 object ProfesorCRUD {
+    private val db: SQLiteDatabase
+        get() = DatabaseManager.getInstance().writableDatabase
 
     fun crearProfesor(id: Int, nombre: String, apellido: String, fechaNacimiento: LocalDate, activo: Boolean, facultadId: Int) {
-        DatabaseManager.getConnection().use { conn ->
-            val sql = """
-                INSERT INTO profesores (id, nombre, apellido, fecha_nacimiento, activo, facultad_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """.trimIndent()
-
-            conn.prepareStatement(sql).use { stmt ->
-                stmt.setInt(1, id)
-                stmt.setString(2, nombre)
-                stmt.setString(3, apellido)
-                stmt.setString(4, fechaNacimiento.toString())
-                stmt.setBoolean(5, activo)
-                stmt.setInt(6, facultadId)
-                stmt.executeUpdate()
-            }
+        val values = ContentValues().apply {
+            put("id", id)
+            put("nombre", nombre)
+            put("apellido", apellido)
+            put("fecha_nacimiento", fechaNacimiento.toString())
+            put("activo", if (activo) 1 else 0)
+            put("facultad_id", facultadId)
         }
-        println("Profesor creado exitosamente.")
+        db.insert("profesores", null, values)
     }
 
     fun leerProfesores(): List<Profesor> {
         val profesores = mutableListOf<Profesor>()
-        DatabaseManager.getConnection().use { conn ->
-            val sql = "SELECT * FROM profesores"
-            conn.createStatement().use { stmt ->
-                val rs = stmt.executeQuery(sql)
-                while (rs.next()) {
-                    profesores.add(
-                        Profesor(
-                            rs.getInt("id"),
-                            rs.getString("nombre"),
-                            rs.getString("apellido"),
-                            LocalDate.parse(rs.getString("fecha_nacimiento")),
-                            rs.getBoolean("activo"),
-                            rs.getInt("facultad_id")
-                        )
-                    )
-                }
-            }
+        val cursor = db.query("profesores", null, null, null, null, null, null)
+
+        while (cursor.moveToNext()) {
+            profesores.add(
+                Profesor(
+                    id = cursor.getInt(cursor.getColumnIndexOrThrow("id")),
+                    nombre = cursor.getString(cursor.getColumnIndexOrThrow("nombre")),
+                    apellido = cursor.getString(cursor.getColumnIndexOrThrow("apellido")),
+                    fechaNacimiento = LocalDate.parse(cursor.getString(cursor.getColumnIndexOrThrow("fecha_nacimiento"))),
+                    activo = cursor.getInt(cursor.getColumnIndexOrThrow("activo")) == 1,
+                    facultadId = cursor.getInt(cursor.getColumnIndexOrThrow("facultad_id"))
+                )
+            )
         }
+        cursor.close()
         return profesores
     }
 
     fun actualizarProfesor(id: Int, nuevoNombre: String, nuevoApellido: String, nuevaFechaNacimiento: LocalDate, nuevoActivo: Boolean) {
-        DatabaseManager.getConnection().use { conn ->
-            val sql = """
-                UPDATE profesores 
-                SET nombre = ?, apellido = ?, fecha_nacimiento = ?, activo = ?
-                WHERE id = ?
-            """.trimIndent()
-
-            conn.prepareStatement(sql).use { stmt ->
-                stmt.setString(1, nuevoNombre)
-                stmt.setString(2, nuevoApellido)
-                stmt.setString(3, nuevaFechaNacimiento.toString())
-                stmt.setBoolean(4, nuevoActivo)
-                stmt.setInt(5, id)
-
-                val rowsAffected = stmt.executeUpdate()
-                if (rowsAffected > 0) {
-                    println("Profesor actualizado exitosamente.")
-                } else {
-                    println("No se encontró el profesor con ID: $id")
-                }
-            }
+        val values = ContentValues().apply {
+            put("nombre", nuevoNombre)
+            put("apellido", nuevoApellido)
+            put("fecha_nacimiento", nuevaFechaNacimiento.toString())
+            put("activo", if (nuevoActivo) 1 else 0)
         }
+
+        db.update("profesores", values, "id = ?", arrayOf(id.toString()))
     }
 
     fun eliminarProfesor(id: Int) {
-        DatabaseManager.getConnection().use { conn ->
-            val sql = "DELETE FROM profesores WHERE id = ?"
-            conn.prepareStatement(sql).use { stmt ->
-                stmt.setInt(1, id)
-                val rowsAffected = stmt.executeUpdate()
-                if (rowsAffected > 0) {
-                    println("Profesor eliminado exitosamente.")
-                } else {
-                    println("No se encontró el profesor con ID: $id")
-                }
-            }
-        }
+        db.delete("profesores", "id = ?", arrayOf(id.toString()))
     }
 
     fun leerProfesorPorId(id: Int): Profesor? {
-        DatabaseManager.getConnection().use { conn ->
-            val sql = "SELECT * FROM profesores WHERE id = ?"
-            conn.prepareStatement(sql).use { stmt ->
-                stmt.setInt(1, id)
-                val rs = stmt.executeQuery()
-                if (rs.next()) {
-                    return Profesor(
-                        rs.getInt("id"),
-                        rs.getString("nombre"),
-                        rs.getString("apellido"),
-                        LocalDate.parse(rs.getString("fecha_nacimiento")),
-                        rs.getBoolean("activo"),
-                        rs.getInt("facultad_id")
-                    )
-                }
-            }
+        val cursor = db.query(
+            "profesores",
+            null,
+            "id = ?",
+            arrayOf(id.toString()),
+            null,
+            null,
+            null
+        )
+
+        return if (cursor.moveToFirst()) {
+            val profesor = Profesor(
+                id = cursor.getInt(cursor.getColumnIndexOrThrow("id")),
+                nombre = cursor.getString(cursor.getColumnIndexOrThrow("nombre")),
+                apellido = cursor.getString(cursor.getColumnIndexOrThrow("apellido")),
+                fechaNacimiento = LocalDate.parse(cursor.getString(cursor.getColumnIndexOrThrow("fecha_nacimiento"))),
+                activo = cursor.getInt(cursor.getColumnIndexOrThrow("activo")) == 1,
+                facultadId = cursor.getInt(cursor.getColumnIndexOrThrow("facultad_id"))
+            )
+            cursor.close()
+            profesor
+        } else {
+            cursor.close()
+            null
         }
-        return null
     }
 }

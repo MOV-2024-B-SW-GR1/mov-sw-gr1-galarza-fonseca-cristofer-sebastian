@@ -1,51 +1,63 @@
 package com.example.sw2024bgr1_csgf
 
-import java.sql.Connection
-import java.sql.DriverManager
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
 
-object DatabaseManager {
-    private const val DB_URL = "jdbc:sqlite:universidad.db"
-    private var connection: Connection? = null
+class DatabaseManager(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
-    init {
-        createTables()
-    }
+    companion object {
+        private const val DATABASE_NAME = "universidad.db"
+        private const val DATABASE_VERSION = 1
 
-    private fun connect(): Connection {
-        if (connection == null || connection?.isClosed == true) {
-            connection = DriverManager.getConnection(DB_URL)
+        @Volatile
+        private var INSTANCE: DatabaseManager? = null
+        private lateinit var APPLICATION_CONTEXT: Context
+
+        // Método para inicializar el contexto de la aplicación
+        fun init(context: Context) {
+            APPLICATION_CONTEXT = context.applicationContext
         }
-        return connection!!
-    }
 
-    private fun createTables() {
-        val connection = connect()
-        connection.createStatement().use { statement ->
-            // Crear tabla Facultades
-            statement.execute("""
-                CREATE TABLE IF NOT EXISTS facultades (
-                    id INTEGER PRIMARY KEY,
-                    nombre TEXT NOT NULL,
-                    ubicacion TEXT NOT NULL,
-                    fecha_fundacion TEXT NOT NULL,
-                    presupuesto REAL NOT NULL
-                )
-            """)
-
-            // Crear tabla Profesores
-            statement.execute("""
-                CREATE TABLE IF NOT EXISTS profesores (
-                    id INTEGER PRIMARY KEY,
-                    nombre TEXT NOT NULL,
-                    apellido TEXT NOT NULL,
-                    fecha_nacimiento TEXT NOT NULL,
-                    activo BOOLEAN NOT NULL,
-                    facultad_id INTEGER,
-                    FOREIGN KEY (facultad_id) REFERENCES facultades(id)
-                )
-            """)
+        fun getInstance(): DatabaseManager {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: DatabaseManager(APPLICATION_CONTEXT).also { INSTANCE = it }
+            }
         }
     }
 
-    fun getConnection(): Connection = connect()
+    override fun onCreate(db: SQLiteDatabase) {
+        // Crear tabla Facultades
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS facultades (
+                id INTEGER PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                ubicacion TEXT NOT NULL,
+                fecha_fundacion TEXT NOT NULL,
+                presupuesto REAL NOT NULL
+            )
+        """)
+
+        // Crear tabla Profesores
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS profesores (
+                id INTEGER PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                apellido TEXT NOT NULL,
+                fecha_nacimiento TEXT NOT NULL,
+                activo INTEGER NOT NULL,
+                facultad_id INTEGER,
+                FOREIGN KEY (facultad_id) REFERENCES facultades(id)
+            )
+        """)
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // Eliminar tablas antiguas y recrearlas
+        db.execSQL("DROP TABLE IF EXISTS profesores")
+        db.execSQL("DROP TABLE IF EXISTS facultades")
+        onCreate(db)
+    }
+
+    fun getConnection(): SQLiteDatabase = writableDatabase
 }

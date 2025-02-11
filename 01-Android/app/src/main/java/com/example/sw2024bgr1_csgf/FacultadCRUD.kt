@@ -4,107 +4,79 @@ import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import java.time.LocalDate
 
-
 object FacultadCRUD {
+    private val db: SQLiteDatabase
+        get() = DatabaseManager.getInstance().writableDatabase
 
     fun crearFacultad(id: Int, nombre: String, ubicacion: String, fechaFundacion: LocalDate, presupuesto: Double) {
-        DatabaseManager.getConnection().use { conn ->
-            val sql = """
-                INSERT INTO facultades (id, nombre, ubicacion, fecha_fundacion, presupuesto)
-                VALUES (?, ?, ?, ?, ?)
-            """.trimIndent()
-
-            conn.prepareStatement(sql).use { stmt ->
-                stmt.setInt(1, id)
-                stmt.setString(2, nombre)
-                stmt.setString(3, ubicacion)
-                stmt.setString(4, fechaFundacion.toString())
-                stmt.setDouble(5, presupuesto)
-                stmt.executeUpdate()
-            }
+        val values = ContentValues().apply {
+            put("id", id)
+            put("nombre", nombre)
+            put("ubicacion", ubicacion)
+            put("fecha_fundacion", fechaFundacion.toString())
+            put("presupuesto", presupuesto)
         }
-        println("Facultad creada exitosamente.")
+        db.insert("facultades", null, values)
     }
 
     fun leerFacultades(): List<Facultad> {
         val facultades = mutableListOf<Facultad>()
-        DatabaseManager.getConnection().use { conn ->
-            val sql = "SELECT * FROM facultades"
-            conn.createStatement().use { stmt ->
-                val rs = stmt.executeQuery(sql)
-                while (rs.next()) {
-                    facultades.add(
-                        Facultad(
-                            rs.getInt("id"),
-                            rs.getString("nombre"),
-                            rs.getString("ubicacion"),
-                            LocalDate.parse(rs.getString("fecha_fundacion")),
-                            rs.getDouble("presupuesto")
-                        )
-                    )
-                }
-            }
+        val cursor = db.query("facultades", null, null, null, null, null, null)
+
+        while (cursor.moveToNext()) {
+            facultades.add(
+                Facultad(
+                    id = cursor.getInt(cursor.getColumnIndexOrThrow("id")),
+                    nombre = cursor.getString(cursor.getColumnIndexOrThrow("nombre")),
+                    ubicacion = cursor.getString(cursor.getColumnIndexOrThrow("ubicacion")),
+                    fechaFundacion = LocalDate.parse(cursor.getString(cursor.getColumnIndexOrThrow("fecha_fundacion"))),
+                    presupuesto = cursor.getDouble(cursor.getColumnIndexOrThrow("presupuesto"))
+                )
+            )
         }
+        cursor.close()
         return facultades
     }
 
     fun actualizarFacultad(id: Int, nuevoNombre: String, nuevaUbicacion: String, nuevaFechaFundacion: LocalDate, nuevoPresupuesto: Double) {
-        DatabaseManager.getConnection().use { conn ->
-            val sql = """
-                UPDATE facultades 
-                SET nombre = ?, ubicacion = ?, fecha_fundacion = ?, presupuesto = ?
-                WHERE id = ?
-            """.trimIndent()
-
-            conn.prepareStatement(sql).use { stmt ->
-                stmt.setString(1, nuevoNombre)
-                stmt.setString(2, nuevaUbicacion)
-                stmt.setString(3, nuevaFechaFundacion.toString())
-                stmt.setDouble(4, nuevoPresupuesto)
-                stmt.setInt(5, id)
-
-                val rowsAffected = stmt.executeUpdate()
-                if (rowsAffected > 0) {
-                    println("Facultad actualizada exitosamente.")
-                } else {
-                    println("No se encontró la facultad con ID: $id")
-                }
-            }
+        val values = ContentValues().apply {
+            put("nombre", nuevoNombre)
+            put("ubicacion", nuevaUbicacion)
+            put("fecha_fundacion", nuevaFechaFundacion.toString())
+            put("presupuesto", nuevoPresupuesto)
         }
+
+        db.update("facultades", values, "id = ?", arrayOf(id.toString()))
     }
 
     fun eliminarFacultad(id: Int) {
-        DatabaseManager.getConnection().use { conn ->
-            val sql = "DELETE FROM facultades WHERE id = ?"
-            conn.prepareStatement(sql).use { stmt ->
-                stmt.setInt(1, id)
-                val rowsAffected = stmt.executeUpdate()
-                if (rowsAffected > 0) {
-                    println("Facultad eliminada exitosamente.")
-                } else {
-                    println("No se encontró la facultad con ID: $id")
-                }
-            }
-        }
+        db.delete("facultades", "id = ?", arrayOf(id.toString()))
     }
 
     fun leerFacultadPorId(id: Int): Facultad? {
-        DatabaseManager.getConnection().use { conn ->
-            val sql = "SELECT * FROM facultades WHERE id = ?"
-            conn.prepareStatement(sql).use { stmt ->
-                stmt.setInt(1, id)
-                val rs = stmt.executeQuery()
-                if (rs.next()) {
-                    return Facultad(
-                        rs.getInt("id"),
-                        rs.getString("nombre"),
-                        rs.getString("ubicacion"),
-                        LocalDate.parse(rs.getString("fecha_fundacion")),
-                        rs.getDouble("presupuesto")
-                    )
-                }
-            }
+        val cursor = db.query(
+            "facultades",
+            null,
+            "id = ?",
+            arrayOf(id.toString()),
+            null,
+            null,
+            null
+        )
+
+        return if (cursor.moveToFirst()) {
+            val facultad = Facultad(
+                id = cursor.getInt(cursor.getColumnIndexOrThrow("id")),
+                nombre = cursor.getString(cursor.getColumnIndexOrThrow("nombre")),
+                ubicacion = cursor.getString(cursor.getColumnIndexOrThrow("ubicacion")),
+                fechaFundacion = LocalDate.parse(cursor.getString(cursor.getColumnIndexOrThrow("fecha_fundacion"))),
+                presupuesto = cursor.getDouble(cursor.getColumnIndexOrThrow("presupuesto"))
+            )
+            cursor.close()
+            facultad
+        } else {
+            cursor.close()
+            null
         }
-        return null
     }
 }
